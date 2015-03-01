@@ -69,7 +69,7 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
     int hours = time1 / 3600;
     
     if(seconds%15==0){
-      vibes_cancel();
+      vibes_double_pulse();
     }
     // Update the TextLayer
     snprintf(time_buffer1, sizeof(time_buffer1), "%dh\n%dm\n%ds", hours, minutes, seconds);
