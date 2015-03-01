@@ -1,3 +1,9 @@
+Pebble.addEventListener('ready',
+  function(e) {
+    console.log('JavaScript app ready and running!');
+  }
+);
+
 Firebase.INTERNAL.forceWebSockets();
 var fb = new Firebase('https://buzzkill2.firebaseio.com/');
 

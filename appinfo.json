@@ -1,5 +1,7 @@
 {
-    "appKeys": {},
+    "appKeys": {
+        "site": 0
+    },
     "capabilities": [
         ""
     ],

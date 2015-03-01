@@ -3,18 +3,23 @@
 #define SCREEN_WIDTH 144
 #define SCREEN_HEIGHT 168  
 #define BUFF 64
-
+#define TRUE 1
+#define FALSE 0
 
 static Window* window;
-static TextLayer* text_layer;
+static TextLayer* timer_text_layer;
+static TextLayer* site_text_layer;
 static int time1 = 0;
 
 static AppSync sync;
 static uint8_t sync_buffer[BUFF];
-static bool is_running = false;
+static int is_running = FALSE;
+
+
 
 enum MsgKeys {
-  OUR_TIME = 0x0
+  OUR_TIME = 0x0,
+  OUR_SITE = 0x0
 };
 
 static void sync_error(DictionaryResult dict_error, 
@@ -24,60 +29,93 @@ static void sync_error(DictionaryResult dict_error,
 
 static void sync_success(const uint32_t key, const Tuple* new_tuple, 
                          const Tuple* old_tuple, void* context) {
-APP_LOG(APP_LOG_LEVEL_DEBUG, "App Sync Success %s", new_tuple->value->cstring);
-  text_layer_set_text(text_layer, new_tuple->value->cstring);
-  if(strcmp(new_tuple->value->cstring,"good to go!") == 0) { // Returns 0 when strings are equal
-    is_running = false;
+
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "hello");
+  if(strcmp(new_tuple->value->cstring,"good to go") == 0) { // Returns 0 when strings are equal
+    is_running = FALSE;
     time1 = 0;
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "false");
+    text_layer_set_text(timer_text_layer, "0h\n0m\n0s");
+    text_layer_set_text(site_text_layer, "You are on kosher sites...");
+    
   }
   else {
-    is_running = true;
+    is_running = TRUE;
+    
+    // Update the  text for URL
+    vibes_short_pulse();
+    static char site_buffer1[32];
+    snprintf(site_buffer1, sizeof(site_buffer1), new_tuple->value->cstring);
+    text_layer_set_text(site_text_layer, site_buffer1);
+  
+    
+    APP_LOG(APP_LOG_LEVEL_DEBUG, "true");
+    
   }
 }
 
-
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
   
-  if(is_running == false){
-    return;
+  if(is_running == TRUE){
+    
+    
+    // Use a long-lived buffer
+    static char time_buffer1[32];
+    
+    // Get time since launch
+    int seconds = time1 % 60;
+    int minutes = (time1 % 3600) / 60;
+    int hours = time1 / 3600;
+    
+    if(seconds%15==0){
+      vibes_cancel();
+    }
+    // Update the TextLayer
+    snprintf(time_buffer1, sizeof(time_buffer1), "%dh\n%dm\n%ds", hours, minutes, seconds);
+    text_layer_set_text(timer_text_layer, time_buffer1);
+  
+    // Increment time
+    time1++;
   }
-  // Use a long-lived buffer
-  static char time_buffer1[32];
   
-  // Get time since launch
-  int seconds = time1 % 60;
-  int minutes = (time1 % 3600) / 60;
-  int hours = time1 / 3600;
-  
-  // Update the TextLayer
-  snprintf(time_buffer1, sizeof(time_buffer1), "%dh %dm %ds", hours, minutes, seconds);
-  text_layer_set_text(text_layer, time_buffer1);
-
-  // Increment time
-  time1++;
 }
 
 static void window_load(Window* window) {
   Layer* window_layer = window_get_root_layer(window);
   
   GRect bounds = layer_get_bounds(window_layer);
-  text_layer = text_layer_create((GRect) {
-    .origin = {0, 30},
-    .size   = {bounds.size.w, 150}
+  timer_text_layer = text_layer_create((GRect) {
+    .origin = {0, 10},
+    .size   = {bounds.size.w, 95}
+  });
+  site_text_layer = text_layer_create((GRect){
+    .origin = {0,105},
+    .size = {bounds.size.w,35}
   });
   
-//  text_layer_set_text(text_layer, "0h 0m 0s");
-  text_layer_set_text_alignment(text_layer, GTextAlignmentCenter);
-  text_layer_set_text_color(text_layer, GColorWhite);
-  text_layer_set_background_color(text_layer, GColorBlack);
-  GSize size = GSize(SCREEN_WIDTH, 50);
-  text_layer_set_size(text_layer, size);
+  
+  text_layer_set_text(timer_text_layer, "0h\n0m\n0s");
+  text_layer_set_text_alignment(timer_text_layer, GTextAlignmentCenter);
+  text_layer_set_text_color(timer_text_layer, GColorWhite);
+  text_layer_set_background_color(timer_text_layer, GColorBlack);
+  text_layer_set_font(timer_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28));
   
   
-  layer_add_child(window_layer, text_layer_get_layer(text_layer));
+  layer_add_child(window_layer, text_layer_get_layer(timer_text_layer));
+  
+  text_layer_set_text(site_text_layer, " ");
+  text_layer_set_text_alignment(site_text_layer, GTextAlignmentCenter);
+  text_layer_set_text_color(site_text_layer, GColorWhite);
+  text_layer_set_background_color(site_text_layer, GColorBlack);
+  text_layer_set_font(site_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  
+  layer_add_child(window_layer, text_layer_get_layer(site_text_layer));
   
   Tuplet initial_value[] = {
-    TupletCString(OUR_TIME, "0h 0m 0s")
+    TupletCString(OUR_TIME, "0h\n0m\n0s"),
+    TupletCString(OUR_SITE, " ")
+    
   };
   
   app_sync_init(&sync, sync_buffer, sizeof(sync_buffer), initial_value, 
@@ -86,7 +124,7 @@ static void window_load(Window* window) {
 
 
 static void window_unload(Window* window) {
-  text_layer_destroy(text_layer);
+  text_layer_destroy(timer_text_layer);
   tick_timer_service_unsubscribe();
 }
 
@@ -97,7 +135,7 @@ static void init(void) {
     .load   = window_load,
     .unload = window_unload
   });
-  bool animated = true;
+  int animated = 1;
   app_message_open(BUFF, BUFF);
   window_stack_push(window, animated);
   tick_timer_service_subscribe(SECOND_UNIT, tick_handler);
